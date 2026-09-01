@@ -198,3 +198,52 @@ async def test_ashould_compress_count_based_above_limit():
 
     assert sync_result == async_result
     assert sync_result is True
+
+
+def test_compress_accepts_empty_string_result(monkeypatch):
+    """An empty string is a successful compression result and should not be retried."""
+    from agno.compression.manager import CompressionManager
+
+    messages = [Message(role="tool", content="Result", tool_name="test")]
+    cm = CompressionManager()
+    call_count = 0
+
+    def return_empty_string(tool_result, run_metrics=None):
+        nonlocal call_count
+        call_count += 1
+        return ""
+
+    monkeypatch.setattr(cm, "_compress_tool_result", return_empty_string)
+
+    cm.compress(messages)
+    cm.compress(messages)
+
+    assert messages[0].compressed_content == ""
+    assert call_count == 1
+    assert cm.stats["tool_results_compressed"] == 1
+    assert cm.stats["compressed_size"] == 0
+
+
+@pytest.mark.asyncio
+async def test_acompress_accepts_empty_string_result(monkeypatch):
+    """Async compression should also record an empty successful result exactly once."""
+    from agno.compression.manager import CompressionManager
+
+    messages = [Message(role="tool", content="Result", tool_name="test")]
+    cm = CompressionManager()
+    call_count = 0
+
+    async def return_empty_string(tool_result, run_metrics=None):
+        nonlocal call_count
+        call_count += 1
+        return ""
+
+    monkeypatch.setattr(cm, "_acompress_tool_result", return_empty_string)
+
+    await cm.acompress(messages)
+    await cm.acompress(messages)
+
+    assert messages[0].compressed_content == ""
+    assert call_count == 1
+    assert cm.stats["tool_results_compressed"] == 1
+    assert cm.stats["compressed_size"] == 0
